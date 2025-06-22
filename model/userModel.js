@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema({
     require: true,
   },
 
+  image: {
+    type: String,
+    default: null,
+  },
+
   role: {
     type: String,
     enum: ["user", "admin"],
@@ -25,7 +30,7 @@ const userSchema = new mongoose.Schema({
   resetCode: {
     type: String,
   },
-  
+
   resetCodeExpires: {
     type: Date,
   },
