@@ -1,61 +1,94 @@
 const WishList = require("../model/wishlistModel");
-const mongoose = require("mongoose");
-
-const getWishList = async (req, res) => {
-  try {
-    const wishList = await WishList.find();
-    res.status(200).json(wishList);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch wishList" });
-  }
-};
-
-
-const getWishlistById = async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    const wishlist = await WishList.find({ userId }).populate("ornamentId");
-
-    return res.status(200).json(wishlist);
-  } catch (error) {
-    console.error("Error fetching wishlist:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
 
 const createWishList = async (req, res) => {
+  const { userId, items } = req.body;
+
+  if (!userId || !items || !items.length || !items[0].ornament) {
+    return res
+      .status(400)
+      .json({ error: "User ID and at least one ornament ID are required" });
+  }
+
   try {
-    const newWishList = new WishList(req.body);
-    const savedWishList = await newWishList.save();
-    res.status(201).json(savedWishList);
+    let wishlist = await WishList.findOne({ userId });
+
+    const ornamentId = items[0].ornament;
+
+    if (!wishlist) {
+      wishlist = new WishList({
+        userId,
+        items: [{ ornament: ornamentId }],
+      });
+    } else {
+      const exists = wishlist.items.some(
+        (item) => item.ornament.toString() === ornamentId
+      );
+
+      if (!exists) {
+        wishlist.items.push({ ornament: ornamentId });
+      }
+    }
+
+    await wishlist.save();
+
+    const populatedWishlist = await WishList.findOne({ userId }).populate("items.ornament");
+
+    return res.status(200).json(populatedWishlist);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create the WishList" });
+    console.error("Error creating wishlist:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
+// Get Wishlist by User ID
+const getWishlistById = async (req, res) => {
+  const { userId } = req.params;
 
-const deleteWishList = async (req, res) => {
   try {
-    const { id } = req.params;
-    const deletedWishlist = await WishList.findByIdAndDelete(id);
-    if (!deletedWishlist) {
+    const wishlist = await WishList.findOne({ userId }).populate("items.ornament");
+
+    if (!wishlist) {
+      return res.status(404).json({ message: "Wishlist not found" });
+    }
+
+    res.status(200).json(wishlist);
+  } catch (error) {
+    console.error("Error fetching wishlist:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+// Remove from Wishlist
+const removeFromWishlist = async (req, res) => {
+  const { userId, ornamentId } = req.params;
+
+  try {
+    const wishlist = await WishList.findOne({ userId });
+
+    if (!wishlist) {
       return res.status(404).json({ error: "Wishlist not found" });
     }
-    res.status(200).json({ message: "Wishlist deleted successfully" });
+
+    wishlist.items = wishlist.items.filter(
+      (item) => item.ornament.toString() !== ornamentId
+    );
+
+    await wishlist.save();
+
+    const updatedWishlist = await WishList.findOne({ userId }).populate("items.ornament");
+
+    res.status(200).json({
+      message: "Item removed from wishlist",
+      items: updatedWishlist.items,
+    });
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete the wishlist" });
+    console.error("Failed to remove from wishlist:", error);
+    res.status(500).json({ error: "Failed to remove from wishlist" });
   }
 };
 
 module.exports = {
-  getWishList,
-  getWishlistById,
   createWishList,
-  deleteWishList,
+  getWishlistById,
+  removeFromWishlist,
 };
